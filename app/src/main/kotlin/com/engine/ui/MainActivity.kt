@@ -26,8 +26,6 @@ class MainActivity : AppCompatActivity() {
 
         initViews()
         initCoreLogic()
-        
-        // التحقق من الصلاحيات قبل تشغيل المتصفح
         checkSmsPermissionAndStart()
     }
 
@@ -37,30 +35,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun initCoreLogic() {
         environmentManager = GoogleEnvironmentManager(this, webView)
-        environmentManager.applyProxy("us-proxy-address.com", 8080)
     }
 
     private fun checkSmsPermissionAndStart() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-            // إذا كانت الصلاحية غير ممنوحة، نطلبها رسمياً من العميل عبر واجهة النظام
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.SEND_SMS), SMS_PERMISSION_CODE)
         } else {
-            // الصلاحية موجودة مسبقاً، نبدأ العمل مباشرة
             environmentManager.loadRegistrationPage()
         }
     }
 
-    // الاستماع لقرار المستخدم بعد ظهور نافذة طلب الصلاحية
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == SMS_PERMISSION_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // وافق المستخدم على منح الصلاحية لتطبيقنا
                 environmentManager.loadRegistrationPage()
             } else {
-                // رفض المستخدم
-                Toast.makeText(this, "يجب الموافقة على صلاحية الـ SMS لضمان تأكيد الأرقام تلقائياً", Toast.LENGTH_LONG).show()
-                // يمكن أيضاً إعادة إغلاق التطبيق أو تحميل الصفحة مع إشعار المستخدم بالخلل المترتب
+                Toast.makeText(this, "يجب قبول الصلاحية لإرسال الرسالة تلقائياً", Toast.LENGTH_LONG).show()
                 environmentManager.loadRegistrationPage()
             }
         }
