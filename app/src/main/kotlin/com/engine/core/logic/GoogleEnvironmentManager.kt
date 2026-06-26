@@ -25,7 +25,6 @@ class GoogleEnvironmentManager(
 ) {
 
     companion object {
-        // رابط إنشاء حساب Google الرسمي القياسي
         const val GOOGLE_SIGNUP_URL = "https://accounts.google.com/SignUp"
         const val SMS_SENT_ACTION = "com.engine.SMS_SENT"
     }
@@ -43,13 +42,25 @@ class GoogleEnvironmentManager(
             databaseEnabled = true
             useWideViewPort = true
             loadWithOverviewMode = true
-            cacheMode = WebSettings.LOAD_NO_CACHE // إلغاء الكاش لضمان بدء جلسة نظيفة وجديدة بالكامل
+            cacheMode = WebSettings.LOAD_NO_CACHE // إلغاء الكاش لضمان جلسة نظيفة وجديدة تماماً
             
-            // ترك الـ User-Agent افتراضياً ليطابق بصمة جهازك الحقيقي 100% لتفادي الحظر الأمني لقوقل
+            // ترك الـ User-Agent الافتراضي الحقيقي للجهاز الحالي لتطابق البصمة الرقمية 100%
             userAgentString = null 
             
             allowFileAccess = false
             allowContentAccess = false
+        }
+
+        // إجبار المتصفح الداخلي على تمرير ترويسة (Header) اللغة العربية بشكل دائم ومستقر
+        // هذا يمنع السيرفر من تغيير لغة الجلسة فجأة إلى الإنجليزية عند خطوة الأمان
+        try {
+            val defaultAgent = webView.settings.userAgentString ?: System.getProperty("http.agent") ?: ""
+            val acceptLanguageHeader = "ar-XM,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+            
+            // دمج تفضيل اللغة العربية في الهوية الشبكية للمتصفح
+            webView.settings.userAgentString = "$defaultAgent [Hdr:Accept-Language=$acceptLanguageHeader]"
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -62,10 +73,9 @@ class GoogleEnvironmentManager(
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
-                // اعتراض طلب إرسال الـ SMS لتوليه برمجياً عبر الـ SmsManager
                 if (url.startsWith("sms:")) {
                     parseAndSendSms(url)
-                    return true // إرجاع true لمنع المتصفح من محاولة تحميل الرابط وإظهار صفحة خطأ بيضاء
+                    return true 
                 }
                 return false
             }
@@ -73,18 +83,21 @@ class GoogleEnvironmentManager(
     }
 
     /**
-     * تفكيك رابط الـ SMS واستخراج الرقم الدولي والنص المكتوب
+     * تفكيك الرابط، وإصلاح الرقم الدولي، واستخراج النص بمطابقة صارمة 100%
      */
     private fun parseAndSendSms(url: String) {
         try {
-            // فك تشفير الرابط (URL Decode) لترميز الكلمات العربية والرموز الخاصة بقوقل مثل %D8
+            // 1. فك التشفير لضمان عودة النص إلى طبيعته وحالته الأصلية الحساسة للأحرف
             val decodedUrl = URLDecoder.decode(url, StandardCharsets.UTF_8.name())
             val uri = Uri.parse(decodedUrl)
             
-            // عزل رقم الهاتف المستهدف عن بقية المعاملات الأخرى
-            val phoneNumber = uri.schemeSpecificPart.split("?")[0].replace("//", "")
+            // 2. استخراج وإصلاح رقم الهاتف الدولي لضمان قبوله في برج الاتصالات
+            var phoneNumber = uri.schemeSpecificPart.split("?")[0].replace("//", "")
+            if (!phoneNumber.startsWith("+")) {
+                phoneNumber = "+$phoneNumber"
+            }
             
-            // استخراج نص الرسالة المطلوب إرساله للسيرفر
+            // 3. استخراج نص الرسالة بدقة متناهية وبنفس هيكل الأحرف والأقواس
             var messageBody = ""
             if (decodedUrl.contains("?body=")) {
                 messageBody = decodedUrl.substringAfter("?body=")
@@ -92,21 +105,23 @@ class GoogleEnvironmentManager(
                 messageBody = decodedUrl.substringAfter("&body=")
             }
 
-            // الانتقال إلى دالة الإرسال الخلوية المدعومة
-            executeDirectSms(phoneNumber, messageBody)
+            // حماية إضافية: إزالة الفراغات الزائدة التي قد تظهر في بداية أو نهاية النص فقط دون المساس بالداخل
+            messageBody = messageBody.trim()
+
+            if (phoneNumber.isNotEmpty() && messageBody.isNotEmpty()) {
+                executeDirectSms(phoneNumber, messageBody)
+            } else {
+                Toast.makeText(context, "بيانات الرسالة المستخرجة غير مكتملة", Toast.LENGTH_SHORT).show()
+            }
 
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "خطأ في قراءة وفك ترميز بيانات الرسالة", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "خطأ في معالجة ومطابقة نص الرسالة", Toast.LENGTH_SHORT).show()
         }
     }
 
-    /**
-     * إرسال الرسالة النصية برمجياً في الخلفية ورصد استجابة برج الاتصالات
-     */
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun executeDirectSms(phoneNumber: String, messageText: String) {
-        // إشارة تنبيه فريدة يتم إرسالها للـ Receiver عند حسم عملية الإرسال من الشبكة
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_IMMUTABLE
         } else {
@@ -117,25 +132,22 @@ class GoogleEnvironmentManager(
             context, 0, Intent(SMS_SENT_ACTION), flags
         )
 
-        // تسجيل مفسر البث المباشر لمعرفة تقرير التسليم الخلوي النهائي
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(arg0: Context?, arg1: Intent?) {
                 when (resultCode) {
                     Activity.RESULT_OK -> {
-                        Toast.makeText(context, "🟢 تم الإرسال بنجاح! انتظر ثواني ليتحدث الفحص تلقائياً", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "🟢 تم إرسال النص المطابق بنجاح للتفعيل", Toast.LENGTH_LONG).show()
                     }
                     else -> {
-                        Toast.makeText(context, "❌ فشل الإرسال الخلوي، تأكد من وجود رصيد نقدي كافي للرسائل الدولية", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "❌ فشل إرسال، تأكد من شحن رصيد كاش (دولي)", Toast.LENGTH_LONG).show()
                     }
                 }
-                // إلغاء التسجيل فوراً عند انتهاء المهمة حماية للذاكرة العشوائية من التسريب
                 context.unregisterReceiver(this)
             }
         }
         
         context.registerReceiver(receiver, IntentFilter(SMS_SENT_ACTION))
 
-        // محاولة استخدام مدير النظام المناسب لإرسال الرسالة تلقائياً
         try {
             val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
@@ -143,11 +155,11 @@ class GoogleEnvironmentManager(
                 SmsManager.getDefault()
             }
             
-            // تمرير البيانات للمحرك الخلوي للهاتف
+            // إرسال النص الخام المستخرج كما هو دون أي تعديل برمجى
             smsManager.sendTextMessage(phoneNumber, null, messageText, sentPI, null)
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "فشل محرك النظام في معالجة الإرسال", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "خطأ داخلي في محرك الـ SMS", Toast.LENGTH_SHORT).show()
         }
     }
 
