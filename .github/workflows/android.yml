@@ -1,9 +1,8 @@
 name: Android CI/CD & Artifact Upload
 
-# تحديد الأحداث التي تطلق عملية البناء التلقائي
 on:
   push:
-    branches: [ "main", "master" ] # تعمل الأتمتة عند الدفع لفرع الدخول الرئيسي
+    branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
 
@@ -25,26 +24,33 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. إعطاء صلاحيات التنفيذ لملف محرك جرادل (Gradle Wrapper)
+    # 3. تثبيت أداة Gradle على السيرفر لتوليد الـ Wrapper المفقود تلقائياً
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+
+    # 4. توليد ملفات الـ Gradle Wrapper والـ JAR المفقودة تلقائياً على السيرفر
+    - name: Generate Gradle Wrapper JAR
+      run: gradle wrapper --gradle-version 8.2.2
+
+    # 5. إعطاء صلاحيات التنفيذ لملف المحرك بعد توليده
     - name: Grant Execute Permission for Gradlew
       run: chmod +x gradlew
 
-    # 4. تشغيل عملية البناء وتجميع الحزم (مما ينتج عنه ملفات APK و JAR للمكتبات إن وجدت)
+    # 6. تشغيل عملية البناء وتجميع الحزم بنجاح الآن
     - name: Build with Gradle
       run: ./gradlew assembleDebug --stacktrace
 
-    # 5. البحث التلقائي عن ملفات JAR الناتجة ورفعها إلى سيرفر GitHub كـ Artifacts
+    # 7. رفع ملفات الـ JAR الناتجة عن المشروع كـ Artifacts
     - name: Upload JAR Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: Compiled-JAR-Files
-        # المسار يبحث بشكل متداخل في مجلد build عن أي ملف ينتهي بامتداد .jar
         path: |
           **/build/intermediates/**/*.jar
           **/build/libs/**/*.jar
-        if-no-files-found: warn # تنبيه في حال لم ينتج كود الأندرويد ملفات JAR مستقلة
+        if-no-files-found: warn
 
-    # 6. رفع ملف الـ APK الناتج (خطوة إضافية لضمان الحصول على التطبيق جاهزاً)
+    # 8. رفع ملف الـ APK الناتج
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
