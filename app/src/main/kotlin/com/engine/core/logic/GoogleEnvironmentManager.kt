@@ -7,7 +7,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.Bitmap
 import android.net.Uri
 import android.telephony.SmsManager
 import android.webkit.CookieManager
@@ -16,9 +15,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
-import androidx.webkit.ProxyConfig
-import androidx.webkit.ProxyController
-import androidx.webkit.WebViewFeature
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -28,8 +24,8 @@ class GoogleEnvironmentManager(
 ) {
 
     companion object {
+        // رابط إنشاء الحساب الرسمي القياسي
         const val GOOGLE_SIGNUP_URL = "https://accounts.google.com/SignUp"
-        const val HIGH_REPUTATION_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro Build/UQ1A.231205.015) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
         const val SMS_SENT_ACTION = "com.engine.SMS_SENT"
     }
 
@@ -46,8 +42,12 @@ class GoogleEnvironmentManager(
             databaseEnabled = true
             useWideViewPort = true
             loadWithOverviewMode = true
-            cacheMode = WebSettings.LOAD_DEFAULT
-            userAgentString = HIGH_REPUTATION_USER_AGENT
+            cacheMode = WebSettings.LOAD_NO_CACHE // منع الكاش لضمان جلسة نظيفة في كل مرة
+            
+            // استخدام الـ User-Agent الافتراضي الحقيقي للجهاز الحالي 
+            // هذا يضمن تطابق بصمة المتصفح مع بصمة النظام 100% لقوقل
+            userAgentString = null 
+            
             allowFileAccess = false
             allowContentAccess = false
         }
@@ -62,29 +62,23 @@ class GoogleEnvironmentManager(
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
-                // اعتراض طلب إرسال الـ SMS
+                // التقاط رابط الرسالة وتمريره للمحرك الخلفي فوراً
                 if (url.startsWith("sms:")) {
                     parseAndSendSms(url)
-                    return true // إرجاع true لمنع المتصفح من إظهار صفحة الخطأ البيضاء
+                    return true 
                 }
                 return false
             }
         }
     }
 
-    /**
-     * تفكيك رابط الـ SMS واستخراج الرقم والنص ثم إرساله
-     */
     private fun parseAndSendSms(url: String) {
         try {
-            // فك تشفير الرابط للتخلص من رموز الـ %D8 وغيرها وتحويلها لنصوص مفهومة
             val decodedUrl = URLDecoder.decode(url, StandardCharsets.UTF_8.name())
-            
-            // استخراج رقم الهاتف (ما بين sms: وعلامة الاستفهام)
             val uri = Uri.parse(decodedUrl)
-            val phoneNumber = uri.schemeSpecificPart.split("?")[0].replace("//", "")
             
-            // استخراج نص الرسالة المرفق بالرابط (إن وجد)
+            // استخراج الرقم والنص بدقة
+            val phoneNumber = uri.schemeSpecificPart.split("?")[0].replace("//", "")
             var messageBody = ""
             if (decodedUrl.contains("?body=")) {
                 messageBody = decodedUrl.substringAfter("?body=")
@@ -92,58 +86,40 @@ class GoogleEnvironmentManager(
                 messageBody = decodedUrl.substringAfter("&body=")
             }
 
-            // تنفيذ الإرسال المؤكد
             executeDirectSms(phoneNumber, messageBody)
 
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "خطأ في معالجة بيانات الرسالة", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "خطأ في قراءة بيانات الرسالة", Toast.LENGTH_SHORT).show()
         }
     }
 
-    /**
-     * إرسال الرسالة في الخلفية برمجياً وتتبع النتيجة قطعياً
-     */
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun executeDirectSms(phoneNumber: String, messageText: String) {
         val sentPI = PendingIntent.getBroadcast(
             context, 0, Intent(SMS_SENT_ACTION), PendingIntent.FLAG_IMMUTABLE
         )
 
-        // تسجيل مستمع لمعرفة النتيجة من شبكة الاتصال
         context.registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(arg0: Context?, arg1: Intent?) {
                 when (resultCode) {
                     Activity.RESULT_OK -> {
-                        Toast.makeText(context, "🟢 تم إرسال رسالة التأكيد بنجاح من الشريحة", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "🟢 تم الإرسال بنجاح! انتظر ثواني ليتحدث الفحص تلقائياً", Toast.LENGTH_LONG).show()
                     }
                     else -> {
-                        Toast.makeText(context, "❌ فشل إرسال الرسالة، تحقق من الرصيد أو التغطية", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "❌ فشل الإرسال الخلوي، تأكد من وجود رصيد كافٍ في الشريحة", Toast.LENGTH_LONG).show()
                     }
                 }
-                context.unregisterReceiver(this) // حماية الذاكرة وإلغاء الاستماع
+                context.unregisterReceiver(this)
             }
         }, IntentFilter(SMS_SENT_ACTION))
 
-        // إرسال الرسالة الفعلي عبر النظام
         try {
             val smsManager = context.getSystemService(SmsManager::class.java)
             smsManager.sendTextMessage(phoneNumber, null, messageText, sentPI, null)
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "حدث خطأ أثناء الإرسال البرمجي", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun applyProxy(host: String, port: Int) {
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
-            val proxyUrl = "http://$host:$port"
-            val proxyConfig = ProxyConfig.Builder().addProxyRule(proxyUrl).addDirect().build()
-            try {
-                ProxyController.getInstance().setProxyOverride(proxyConfig, { it.run() }, {})
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            Toast.makeText(context, "فشل المحرك في إرسال الرسالة", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -154,8 +130,5 @@ class GoogleEnvironmentManager(
     fun clearSessionData() {
         CookieManager.getInstance().removeAllCookies(null)
         webView.clearCache(true)
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
-            ProxyController.getInstance().clearProxyOverride({ it.run() }, {})
-        }
     }
 }
