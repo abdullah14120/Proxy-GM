@@ -1,0 +1,62 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.engine'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.engine"
+        minSdk 24 // الحد الأدنى لدعم الميزات الحديثة و ProxyController بشكل مستقر
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            // تفعيل حماية الكود وتقليص الحجم للمكتبات الخارجية
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    buildFeatures {
+        // تفعيل خاصية ViewBinding اختياريًا إذا أردت استخدامها لاحقاً لتسهيل إدارة عناصر الواجهة
+        viewBinding false 
+    }
+}
+
+dependencies {
+    // مكتبات أندرويد الأساسية ودعم الواجهات
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // المكتبة الحركية الأساسية لإدارة الـ WebView والميزات المتقدمة مثل ProxyController
+    implementation 'androidx.webkit:webkit:1.11.0'
+
+    // مكتبات الاختبار القياسية (تلقائية مع أي مشروع أندرويد)
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
