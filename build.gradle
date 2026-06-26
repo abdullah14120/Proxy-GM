@@ -1,20 +1,15 @@
-// ملف إعدادات الجذر الرئيسي - Project-level build.gradle
-
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        // أداة بناء أندرويد الأساسية متوافقة مع إعدادات حزمة كمبايل 34
-        classpath 'com.android.tools.build:gradle:8.2.2'
-        
-        // أداة دعم لغة كوتلن داخل بيئة أندرويد ستوديو
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
+        // تحديث الإصدار لحل مشكلة تعارض ومزامنة المكتبات المعتمدة
+        classpath 'com.android.tools.build:gradle:8.3.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24"
     }
 }
 
 task clean(type: Delete) {
-    // مهمة لتنظيف المجلدات المؤقتة عند إعادة بناء المشروع (Rebuild Project)
     delete rootProject.buildDir
 }
