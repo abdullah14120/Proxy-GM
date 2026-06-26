@@ -1,0 +1,52 @@
+name: Android CI/CD & Artifact Upload
+
+# تحديد الأحداث التي تطلق عملية البناء التلقائي
+on:
+  push:
+    branches: [ "main", "master" ] # تعمل الأتمتة عند الدفع لفرع الدخول الرئيسي
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    name: Build Project and Upload Artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. جلب كود المشروع من مستودع جيت هاب
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # 2. إعداد بيئة جافا (JDK) اللازمة لبناء أندرويد
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    # 3. إعطاء صلاحيات التنفيذ لملف محرك جرادل (Gradle Wrapper)
+    - name: Grant Execute Permission for Gradlew
+      run: chmod +x gradlew
+
+    # 4. تشغيل عملية البناء وتجميع الحزم (مما ينتج عنه ملفات APK و JAR للمكتبات إن وجدت)
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug --stacktrace
+
+    # 5. البحث التلقائي عن ملفات JAR الناتجة ورفعها إلى سيرفر GitHub كـ Artifacts
+    - name: Upload JAR Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Compiled-JAR-Files
+        # المسار يبحث بشكل متداخل في مجلد build عن أي ملف ينتهي بامتداد .jar
+        path: |
+          **/build/intermediates/**/*.jar
+          **/build/libs/**/*.jar
+        if-no-files-found: warn # تنبيه في حال لم ينتج كود الأندرويد ملفات JAR مستقلة
+
+    # 6. رفع ملف الـ APK الناتج (خطوة إضافية لضمان الحصول على التطبيق جاهزاً)
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Android-Debug-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
