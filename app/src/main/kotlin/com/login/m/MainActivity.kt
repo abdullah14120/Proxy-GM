@@ -10,14 +10,13 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // بناء الواجهة برمجياً بشكل مباشر لتجنب تعقيد ملفات XML الـ Layout
         val button = Button(this).apply {
             text = "فتح جلسة متصفح جديدة ونظيفة"
             setOnClickListener {
-                // تصفير أي كوكيز عالقة قبل بدء الجلسة الجديدة
+                // تنظيف الكوكيز والجلسات السابقة
                 SessionCleaner.clearAllData(applicationContext)
                 
-                // الانتقال إلى متصفح الجلسة
+                // الاستدعاء المباشر للكلاس المتواجد في نفس الحزمة
                 val intent = Intent(this@MainActivity, BrowserActivity::class.java)
                 startActivity(intent)
             }
